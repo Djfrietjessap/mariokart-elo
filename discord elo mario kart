@@ -1,0 +1,140 @@
+def kans (dic_elo,naam1,naam2): # functie die de kansen berekent
+    kans1 = 1 / (1 + 10**((dic_elo.get(naam2,"")- dic_elo.get(naam1,""))/400)) # formule elo kans
+    kans2 = 1 / (1 + 10**((dic_elo.get(naam1,"") - dic_elo.get(naam2,""))/400))
+    return (kans1,kans2,"De kans dat " + naam1 + " wint is " + str(kans1* 100) + "%" +", de kans dat " + naam2 +" wint is " + str(kans2* 100) + "%" )
+
+def slokken(dic_elo,naam1,naam2): # functie die berekent hoeveel slokken dat je moet drinken als je veliest
+    slokken_coefficient = 6
+    kans1 = kans(dic_elo,naam1,naam2)[0]
+    kans2 = kans(dic_elo, naam1, naam2)[1]
+    aantal_slokken_naam1 = math.ceil(kans1 * slokken_coefficient) # zelf gemaakte formule die werkt met kans gewichten
+    aantal_slokken_naam2 = math.ceil(kans2 * slokken_coefficient)
+    return("Als " + naam1 + " verliest moet hij " + str(aantal_slokken_naam1) + " slokken drinken," + "Als " + naam2 + " verliest moet hij " + str(aantal_slokken_naam2) + " slokken drinken")
+
+def nieuwe_elo(dic_elo,naam1,naam2,winnaar): #functie die de nieuwe elos bepaalt
+
+    k_coeficient = 30
+    verwachting1 = kans (dic_elo,naam1,naam2)[0] #verwacthing komt overeen met de kans
+    verwachting2 = kans(dic_elo, naam1, naam2)[1]
+    if winnaar == naam1:
+        uitkomst1 = 1 #dit is de uitkomst van het spel (wie er wint dus krijgt 1 de andere 0)
+        uitkomst2 = 0
+
+    elif winnaar == naam2:
+        uitkomst1 = 0
+        uitkomst2 = 1
+    nieuwe_elo_naam1 =  dic_elo.get(naam1,"") + k_coeficient *(uitkomst1 - verwachting1) #formule nieuwe elo
+    nieuwe_elo_naam2 =  dic_elo.get(naam2,"") + k_coeficient *(uitkomst2 - verwachting2)
+    return (nieuwe_elo_naam1, nieuwe_elo_naam2, "De nieuwe elo voor "+ naam1 + " is " + str(nieuwe_elo_naam1)+","+"De nieuwe elo voor "+ naam2 + " is " + str(nieuwe_elo_naam2) )
+
+
+def print_functie_voor_spel(dic_elo, naam1, naam2): #dit print al de gegevens voor het spel
+
+    print(kans(dic_elo, naam1, naam2)[2])
+    print(slokken(dic_elo, naam1, naam2))
+
+
+def print_functie_na_spel(dic_elo, naam1, naam2,winnaar):
+    print(nieuwe_elo(dic_elo, naam1, naam2,winnaar)[2])
+
+
+
+start = True
+if start :
+    start = False
+    vorige_elo_dic = {}
+    dic_elo = {}
+    inhoud = open("mariokart elo.csv","r") # opent alleen bij start en laat alle elo's in
+
+    for lijn in inhoud:
+        lijn = lijn.strip()
+        lijst_lijn = lijn.split(",")
+        dic_elo[lijst_lijn[0]] = int(lijst_lijn[1])
+    inhoud.close()
+
+    print(dic_elo)
+
+    inhoud2 = open("mariokart vorige elo.csv","r") # doet dit ook met de elo's van het verleden voor de evoltutie grafiek
+    for lijn in inhoud2:
+        lijn = lijn.strip()
+        lijst_lijn = lijn.split(",")
+        vorige_elo_dic[lijst_lijn[0]]= [int(i) for i in list(lijst_lijn[1:])]
+
+
+    inhoud2.close()
+
+
+@client.command()
+async def elo(ctx, naam): # geeft elo weer van een speler
+    await ctx.send(f'elo = {dic_elo.get(naam, "")}')
+
+@client.command()
+async def vs(ctx, naam1, naam2, inzet=0): # kies 2 personen  en geeft de kans dat iemand wint, met de uitgerekende slokken die bepaald worden door mijn zelf gemaakte formulle
+    await ctx.send(f'kans dat {naam1} wint is  {(kans(dic_elo,naam1, naam2)[0])* 100} % ')
+    await ctx.send(f'kans dat {naam2} wint is  {(kans(dic_elo,naam1, naam2)[1])* 100} % ')
+    await ctx.send(f'{naam1} mag er {inzet} uitdelen  bij winst ')
+    await ctx.send(f'{naam2} mag er {math.ceil(int(inzet )*(kans(dic_elo,naam1, naam2)[0]/kans(dic_elo,naam1, naam2)[1])) } uitdelen  bij winst ')
+
+@client.command()
+async def winst(ctx, naam1, naam2): # kiest 2 persoenen met de winnende links,  ze krijgen hun nieuwe elo in bijde dics, en worden ook o weer gegeven in discord
+    print(dic_elo)
+    winnaar = naam1
+    dic_elo[naam1] = math.ceil(nieuwe_elo(dic_elo, naam1, naam2, winnaar)[0])
+    dic_elo[naam2] = math.ceil(nieuwe_elo(dic_elo, naam1, naam2, winnaar)[1])
+    print(vorige_elo_dic)
+    vorige_elo_dic[naam1].append(math.ceil(nieuwe_elo(dic_elo, naam1, naam2, winnaar)[0]))
+    vorige_elo_dic[naam2].append(math.ceil(nieuwe_elo(dic_elo, naam1, naam2, winnaar)[1]))
+    await ctx.send(f'nieuwe elo voor {naam1}  is  {(dic_elo[naam1])}  ')
+    await ctx.send(f'nieuwe elo voor {naam2}  is  {(dic_elo[naam2])}  ')
+
+
+
+
+
+
+
+@client.command()
+async def save(ctx): # saved alle elos door deze weg te schrijven
+    inhoud = []
+    for keys in dic_elo:
+        inhoud.append(keys  +","+ str(dic_elo[keys]) + '\n')
+    file = open("mariokart elo.csv","w")
+    file.write("".join(inhoud))
+    file.close()
+    await ctx.send("elo's zijn gesaved")
+
+@client.command()
+async def clearall(ctx):  # delete de file met de elos in
+    file = open("mariokart elo.csv", "w")
+    file.write(" ")
+    file.close()
+
+
+
+@client.command()
+async def quickset(ctx, naam1, naam2, snelheid = 4): # wanneer je de elos sneller wilt stabiel maken kan je meerdere matchen na elkaar laten afgaan, met snelheid het hoeveelheid matchen
+    for i in range(snelheid):
+        winnaar = naam1
+        dic_elo[naam1] = math.ceil(nieuwe_elo(dic_elo, naam1, naam2, winnaar)[0])
+        dic_elo[naam2] = math.ceil(nieuwe_elo(dic_elo, naam1, naam2, winnaar)[1])
+        vorige_elo_dic[naam1].append(math.ceil(nieuwe_elo(dic_elo, naam1, naam2, winnaar)[0]))
+        vorige_elo_dic[naam2].append(math.ceil(nieuwe_elo(dic_elo, naam1, naam2, winnaar)[1]))
+    await ctx.send(f'nieuwe elo voor {naam1}  is  {(dic_elo[naam1])}  ')
+    await ctx.send(f'nieuwe elo voor {naam2}  is  {(dic_elo[naam2])}  ')
+
+
+@client.command()
+async def nieuw(ctx,naam,elo): # maakt een nieuw persoon 
+
+   
+    dic_elo[naam] = 0
+    dic_elo[naam] = int(elo)
+    print(int(elo))
+    print(dic_elo)
+    inhoud3 = open("mariokart elo.csv", "a") # en schrijft alle  waardens weg naar de files
+    inhoud3.write(naam + "," + str(elt) + '\n')
+    inhoud3.close()
+    file = open("mariokart vorige elo.csv", "a")
+    file.write(naam + "," + str(elo) + '\n')
+    file.close()
+    await ctx.send(f'{naam} werd toegevoegd met {elot} elo  ')
